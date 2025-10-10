@@ -1,52 +1,73 @@
-
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { AppSettings, Book, LibraryFile } from '../types';
-import { listFilesFromLibrary as listFilesFromSupabase, downloadFileContent as downloadFileFromSupabase, deleteFileFromLibrary as deleteFileFromSupabase, uploadCsvToSupabase } from '../services/supabaseService';
-import { listFilesFromLocal, downloadFileContentFromLocal, deleteFileFromLocal, saveCollectionToLocal } from '../services/localLibraryService';
+import { AppSettings, Book } from '../types';
+import { 
+    getCollectionNames, 
+    getCollection, 
+    deleteCollection, 
+    saveCollection, 
+    getAllBooks as getAllLocalBooks
+} from '../services/localLibraryService';
+import { 
+    listFilesFromLibrary, 
+    downloadFileContent, 
+    deleteFileFromLibrary,
+    uploadCsvToSupabase
+} from '../services/supabaseService';
+import { parseCSV, convertToCSV } from '../utils/csvHelper';
 import Spinner from './Spinner';
 import ActionButton from './ActionButton';
-import { parseCSV, convertToCSV } from '../utils/csvHelper';
 
 interface LibraryViewerProps {
     settings: AppSettings | null;
 }
 
 const LibraryViewer: React.FC<LibraryViewerProps> = ({ settings }) => {
-    const [files, setFiles] = useState<LibraryFile[]>([]);
-    const [selectedFile, setSelectedFile] = useState<LibraryFile | null>(null);
+    const [collections, setCollections] = useState<string[]>([]);
+    const [selectedCollection, setSelectedCollection] = useState<string | null>(null);
     const [books, setBooks] = useState<Book[]>([]);
     const [loading, setLoading] = useState<'list' | 'content' | false>(false);
     const [error, setError] = useState<string | null>(null);
     const [isViewAllActive, setIsViewAllActive] = useState<boolean>(false);
     const [initialLoadComplete, setInitialLoadComplete] = useState<boolean>(false);
-    const [bookCounts, setBookCounts] = useState<Record<string, number | null>>({});
+    const [bookCounts, setBookCounts] = useState<Record<string, number>>({});
     
-    // State for editing functionality
     const [isEditMode, setIsEditMode] = useState<boolean>(false);
     const [saveState, setSaveState] = useState<'idle' | 'saving' | 'success' | 'error'>('idle');
     const [saveMessage, setSaveMessage] = useState<string>('');
+    
+    const useSupabase = !!(settings?.supabaseUrl && settings?.supabaseKey);
 
-    const isSupabaseConfigured = useMemo(() => !!(settings?.supabaseUrl && settings?.supabaseKey), [settings]);
-    
     const totalBooks = useMemo(() => {
-        if (files.length === 0 || Object.keys(bookCounts).length < files.length) {
-            return null;
-        }
-        // FIX: Add explicit types to the `reduce` parameters to resolve a TypeScript inference issue.
-        return Object.values(bookCounts).reduce((sum: number, count: number | null) => sum + (count || 0), 0);
-    }, [bookCounts, files]);
+        if (collections.length === 0) return 0;
+        return Object.values(bookCounts).reduce((sum, count) => sum + count, 0);
+    }, [bookCounts, collections]);
     
-    const loadFiles = useCallback(async () => {
+    const loadCollections = useCallback(async () => {
         setLoading('list');
         setError(null);
         try {
-            let fileList;
-            if (isSupabaseConfigured) {
-                fileList = await listFilesFromSupabase(settings!.supabaseUrl!, settings!.supabaseKey!);
+            const counts: Record<string, number> = {};
+            let names: string[];
+            if (useSupabase) {
+                const files = await listFilesFromLibrary(settings!.supabaseUrl!, settings!.supabaseKey!);
+                names = files.map(f => f.name.replace(/\.csv$/, ''));
+                // Fetch content to get counts - could be slow for many files
+                const countPromises = files.map(async (file) => {
+                    const content = await downloadFileContent(file.name, settings!.supabaseUrl!, settings!.supabaseKey!);
+                    return { name: file.name.replace(/\.csv$/, ''), count: parseCSV(content).length };
+                });
+                const resolvedCounts = await Promise.all(countPromises);
+                resolvedCounts.forEach(item => {
+                    counts[item.name] = item.count;
+                });
             } else {
-                fileList = await listFilesFromLocal();
+                names = getCollectionNames();
+                names.forEach(name => {
+                    counts[name] = (getCollection(name) || []).length;
+                });
             }
-            setFiles(fileList);
+            setCollections(names.sort((a, b) => a.localeCompare(b)));
+            setBookCounts(counts);
         } catch (err) {
             const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred.';
             setError(`Failed to load library: ${errorMessage}`);
@@ -54,70 +75,27 @@ const LibraryViewer: React.FC<LibraryViewerProps> = ({ settings }) => {
             setLoading(false);
             setInitialLoadComplete(true);
         }
-    }, [settings, isSupabaseConfigured]);
-
-    useEffect(() => {
-        if (files.length === 0) {
-            return;
-        }
-
-        const fetchAllCounts = async () => {
-            const filesToFetch = files.filter(f => bookCounts[f.name] === undefined);
-            if (filesToFetch.length === 0) return;
-
-            const promises = filesToFetch.map(async (file) => {
-                try {
-                    let content;
-                    if (isSupabaseConfigured) {
-                        content = await downloadFileFromSupabase(file.name, settings!.supabaseUrl!, settings!.supabaseKey!);
-                    } else {
-                        content = await downloadFileContentFromLocal(file.name);
-                    }
-                    const parsedBooks = parseCSV(content);
-                    return { name: file.name, count: parsedBooks.length };
-                } catch (error) {
-                    console.error(`Failed to fetch count for ${file.name}:`, error);
-                    return { name: file.name, count: null };
-                }
-            });
-
-            const results = await Promise.all(promises);
-
-            setBookCounts(prevCounts => {
-                const newCounts = { ...prevCounts };
-                results.forEach(result => {
-                    newCounts[result.name] = result.count;
-                });
-                return newCounts;
-            });
-        };
-
-        fetchAllCounts();
-    }, [files, settings, bookCounts, isSupabaseConfigured]);
+    }, [useSupabase, settings]);
 
     const handleViewAll = useCallback(async () => {
-        if (files.length === 0) return;
-
         setLoading('content');
-        setSelectedFile(null);
+        setSelectedCollection(null);
         setIsViewAllActive(true);
         setIsEditMode(false);
         setError(null);
         setBooks([]);
 
         try {
-            const allBookPromises = files.map(file => {
-                if (isSupabaseConfigured) {
-                    return downloadFileFromSupabase(file.name, settings!.supabaseUrl!, settings!.supabaseKey!)
-                        .then(content => parseCSV(content));
-                }
-                return downloadFileContentFromLocal(file.name).then(content => parseCSV(content));
-            });
-
-            const allBooksArrays = await Promise.all(allBookPromises);
-            const combinedBooks = allBooksArrays.flat();
-            
-            setBooks(combinedBooks);
+            let allBooks: Book[];
+            if (useSupabase) {
+                const files = await listFilesFromLibrary(settings!.supabaseUrl!, settings!.supabaseKey!);
+                const contentPromises = files.map(f => downloadFileContent(f.name, settings!.supabaseUrl!, settings!.supabaseKey!));
+                const allCsvs = await Promise.all(contentPromises);
+                allBooks = allCsvs.flatMap(csv => parseCSV(csv));
+            } else {
+                allBooks = getAllLocalBooks();
+            }
+            setBooks(allBooks);
         } catch (err) {
             const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred.';
             setError(`Failed to load all collections: ${errorMessage}`);
@@ -126,72 +104,72 @@ const LibraryViewer: React.FC<LibraryViewerProps> = ({ settings }) => {
         } finally {
             setLoading(false);
         }
-    }, [settings, files, isSupabaseConfigured]);
+    }, [useSupabase, settings]);
 
     useEffect(() => {
-        loadFiles();
-    }, [loadFiles]);
+        loadCollections();
+    }, [loadCollections]);
 
     useEffect(() => {
-        // This effect runs after the initial file list has been loaded.
-        if (initialLoadComplete && files.length > 0 && !isViewAllActive && !selectedFile) {
+        if (initialLoadComplete && collections.length > 0 && !isViewAllActive && !selectedCollection) {
             handleViewAll();
+        } else if (initialLoadComplete && collections.length === 0) {
+            setBooks([]);
         }
-    }, [initialLoadComplete, files, isViewAllActive, selectedFile, handleViewAll]);
+    }, [initialLoadComplete, collections, isViewAllActive, selectedCollection, handleViewAll]);
 
-    const handleFileSelect = async (file: LibraryFile, editMode = false) => {
+    const handleCollectionSelect = async (name: string, editMode = false) => {
         setLoading('content');
-        setSelectedFile(file);
+        setSelectedCollection(name);
         setIsViewAllActive(false);
         setIsEditMode(editMode);
         setError(null);
         setSaveState('idle');
 
         try {
-            let content;
-            if (isSupabaseConfigured) {
-                content = await downloadFileFromSupabase(file.name, settings!.supabaseUrl!, settings!.supabaseKey!);
+            let collectionBooks: Book[];
+            if (useSupabase) {
+                const csvContent = await downloadFileContent(`${name}.csv`, settings!.supabaseUrl!, settings!.supabaseKey!);
+                collectionBooks = parseCSV(csvContent);
             } else {
-                content = await downloadFileContentFromLocal(file.name);
+                collectionBooks = getCollection(name) || [];
             }
-            const parsedBooks = parseCSV(content);
-            setBooks(parsedBooks);
+            setBooks(collectionBooks);
         } catch (err) {
             const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred.';
-            setError(`Failed to load file content: ${errorMessage}`);
+            setError(`Failed to load collection content: ${errorMessage}`);
             setBooks([]);
         } finally {
             setLoading(false);
         }
     };
 
-    const handleDelete = async (fileName: string) => {
-        if (window.confirm(`Are you sure you want to delete "${fileName}"? This action cannot be undone.`)) {
+    const handleDelete = async (collectionName: string) => {
+        if (window.confirm(`Are you sure you want to delete "${collectionName}"? This action cannot be undone.`)) {
             try {
-                if (isSupabaseConfigured) {
-                    await deleteFileFromSupabase(fileName, settings!.supabaseUrl!, settings!.supabaseKey!);
+                if (useSupabase) {
+                    await deleteFileFromLibrary(`${collectionName}.csv`, settings!.supabaseUrl!, settings!.supabaseKey!);
                 } else {
-                    await deleteFileFromLocal(fileName);
+                    deleteCollection(collectionName);
                 }
                 handleRefresh();
             } catch (err) {
                 const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred.';
-                setError(`Failed to delete file: ${errorMessage}`);
+                setError(`Failed to delete collection: ${errorMessage}`);
             }
         }
     };
     
     const handleRefresh = () => {
-        setSelectedFile(null);
+        setSelectedCollection(null);
         setBooks([]);
         setIsViewAllActive(false);
         setIsEditMode(false);
         setInitialLoadComplete(false);
         setBookCounts({});
-        loadFiles();
+        loadCollections();
     };
 
-    // --- Edit Mode Handlers ---
     const handleBookChange = (index: number, field: keyof Book, value: string | number) => {
         const updatedBooks = [...books];
         updatedBooks[index] = { ...updatedBooks[index], [field]: value };
@@ -209,28 +187,28 @@ const LibraryViewer: React.FC<LibraryViewerProps> = ({ settings }) => {
     const handleCancelEdit = () => {
         setIsEditMode(false);
         setSaveState('idle');
-        // Re-fetch original content to discard changes
-        if (selectedFile) {
-            handleFileSelect(selectedFile, false);
+        if (selectedCollection) {
+            handleCollectionSelect(selectedCollection, false);
         }
     };
 
     const handleSaveChanges = async () => {
-        if (!selectedFile) return;
+        if (!selectedCollection) return;
         
         setSaveState('saving');
         setSaveMessage('Saving changes...');
         
         try {
-            const csvData = convertToCSV(books);
-            if (isSupabaseConfigured) {
-                await uploadCsvToSupabase(csvData, selectedFile.name, settings!.supabaseUrl!, settings!.supabaseKey!);
+            if (useSupabase) {
+                const csvData = convertToCSV(books);
+                await uploadCsvToSupabase(csvData, `${selectedCollection}.csv`, settings!.supabaseUrl!, settings!.supabaseKey!);
             } else {
-                await saveCollectionToLocal(selectedFile.name, csvData);
+                saveCollection(selectedCollection, books);
             }
+
             setSaveState('success');
             setSaveMessage('Collection updated successfully!');
-            setBookCounts(prev => ({...prev, [selectedFile.name]: books.length}));
+            setBookCounts(prev => ({...prev, [selectedCollection]: books.length}));
             
             setTimeout(() => {
                 setIsEditMode(false);
@@ -244,17 +222,15 @@ const LibraryViewer: React.FC<LibraryViewerProps> = ({ settings }) => {
         }
     };
 
-    // --- Render Logic ---
-
     if (loading === 'list' && !initialLoadComplete) {
-        return <Spinner message="Loading your library..." />;
+        return <Spinner message={`Loading your ${useSupabase ? 'cloud' : 'local'} library...`} />;
     }
 
-    if (error && files.length === 0) {
+    if (error && collections.length === 0) {
         return (
             <div className="text-center">
                 <p className="text-red-400 mb-4">{error}</p>
-                <ActionButton onClick={loadFiles} text="Retry" primary />
+                <ActionButton onClick={loadCollections} text="Retry" primary />
             </div>
         );
     }
@@ -346,15 +322,10 @@ const LibraryViewer: React.FC<LibraryViewerProps> = ({ settings }) => {
 
     return (
         <div className="animate-fade-in">
-             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
-                <div>
-                    <h2 className="text-2xl font-bold text-gray-200">My Library</h2>
-                    {!isSupabaseConfigured && (
-                        <p className="text-xs text-yellow-400 mt-1">
-                            <span className="font-bold">Note:</span> Your library is stored locally in this browser. Clearing browser data will remove it.
-                        </p>
-                    )}
-                </div>
+             <div className="flex justify-between items-center mb-6">
+                <h2 className="text-2xl font-bold text-gray-200">
+                    My Library <span className="text-sm font-normal text-gray-400">({useSupabase ? 'Cloud' : 'Local'})</span>
+                </h2>
                 <button onClick={handleRefresh} className="p-2 text-gray-400 hover:text-white transition-colors duration-200" aria-label="Refresh library list">
                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h5M20 20v-5h-5M4 4l1.5 1.5A9 9 0 0120.5 9.5M20 20l-1.5-1.5A9 9 0 003.5 14.5" /></svg>
                 </button>
@@ -362,21 +333,21 @@ const LibraryViewer: React.FC<LibraryViewerProps> = ({ settings }) => {
 
             {error && <p className="text-red-400 mb-4 text-center">{error}</p>}
 
-            {files.length === 0 && !loading && (
+            {collections.length === 0 && !loading && (
                  <div className="text-center py-10 px-4 bg-gray-900/50 rounded-lg">
                     <svg xmlns="http://www.w3.org/2000/svg" className="mx-auto h-12 w-12 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 9.776c.112-.017.227-.026.344-.026h15.812c.117 0 .232.009.344.026m-16.5 0a2.25 2.25 0 00-1.883 2.542l.857 6a2.25 2.25 0 002.227 1.932H19.05a2.25 2.25 0 002.227-1.932l.857-6a2.25 2.25 0 00-1.883-2.542m-16.5 0A2.25 2.25 0 015.625 7.5h12.75c1.131 0 2.162.8 2.344 1.932m-16.5 0a2.25 2.25 0 00-1.883 2.542m16.5 0a2.25 2.25 0 01-1.883 2.542m0 0v6a2.25 2.25 0 01-2.25 2.25H5.625a2.25 2.25 0 01-2.25-2.25v-6m16.5 0v-2.25a2.25 2.25 0 00-2.25-2.25H5.625a2.25 2.25 0 00-2.25 2.25v2.25" /></svg>
                     <h3 className="mt-2 text-lg font-medium text-white">Your library is empty.</h3>
-                    <p className="mt-1 text-sm text-gray-400">Add some books to see your collections here.</p>
+                    <p className="mt-1 text-sm text-gray-400">Go to "Add Books" to create your first collection.</p>
                 </div>
             )}
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {files.length > 0 && (
+                {collections.length > 0 && (
                     <div className="md:col-span-1 bg-gray-900/50 rounded-lg border border-gray-700 p-4 h-fit max-h-[70vh] overflow-y-auto">
                         <h3 className="font-semibold text-gray-300 mb-2 text-sm uppercase tracking-wider">Collections</h3>
                          <button 
                             onClick={handleViewAll} 
-                            disabled={files.length === 0}
+                            disabled={collections.length === 0}
                             className={`w-full text-left p-2 rounded-md mb-2 font-semibold transition-colors flex items-center justify-between gap-2 ${
                                 isViewAllActive 
                                 ? 'bg-blue-600 text-white' 
@@ -390,27 +361,24 @@ const LibraryViewer: React.FC<LibraryViewerProps> = ({ settings }) => {
                                 <span>View All</span>
                             </div>
                             <span className="text-xs font-mono bg-gray-800/50 px-1.5 py-0.5 rounded">
-                                {totalBooks !== null ? totalBooks : files.length}
+                                {totalBooks}
                             </span>
                         </button>
                         <div className="border-t border-gray-700 my-2"></div>
                         <ul>
-                            {files.map(file => (
-                                <li key={file.id} className="group flex justify-between items-center rounded-md hover:bg-blue-900/50 transition-colors">
-                                    <button onClick={() => handleFileSelect(file, false)} className={`w-full text-left p-2 rounded-md flex items-center justify-between ${!isViewAllActive && selectedFile?.id === file.id ? 'text-blue-400 font-semibold' : 'text-gray-300'}`}>
-                                        <span className="truncate pr-2">{file.name}</span>
+                            {collections.map(name => (
+                                <li key={name} className="group flex justify-between items-center rounded-md hover:bg-blue-900/50 transition-colors">
+                                    <button onClick={() => handleCollectionSelect(name, false)} className={`w-full text-left p-2 rounded-md flex items-center justify-between ${!isViewAllActive && selectedCollection === name ? 'text-blue-400 font-semibold' : 'text-gray-300'}`}>
+                                        <span className="truncate pr-2">{name}</span>
                                         <span className="flex-shrink-0 text-xs text-gray-500 font-normal group-hover:text-gray-300">
-                                            {bookCounts[file.name] !== undefined 
-                                                ? (bookCounts[file.name] === null ? 'N/A' : bookCounts[file.name])
-                                                : '...'
-                                            }
+                                            {bookCounts[name] !== undefined ? bookCounts[name] : '...'}
                                         </span>
                                     </button>
                                      <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
-                                        <button onClick={() => handleFileSelect(file, true)} className="p-2 text-gray-400 hover:text-blue-400" aria-label={`Edit ${file.name}`}>
+                                        <button onClick={() => handleCollectionSelect(name, true)} className="p-2 text-gray-400 hover:text-blue-400" aria-label={`Edit ${name}`}>
                                             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M17.414 2.586a2 2 0 00-2.828 0L7 10.172V13h2.828l7.586-7.586a2 2 0 000-2.828z" /><path fillRule="evenodd" d="M2 6a2 2 0 012-2h4a1 1 0 010 2H4v10h10v-4a1 1 0 112 0v4a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" clipRule="evenodd" /></svg>
                                         </button>
-                                        <button onClick={() => handleDelete(file.name)} className="p-2 text-gray-400 hover:text-red-500" aria-label={`Delete ${file.name}`}>
+                                        <button onClick={() => handleDelete(name)} className="p-2 text-gray-400 hover:text-red-500" aria-label={`Delete ${name}`}>
                                             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                                         </button>
                                     </div>
@@ -421,22 +389,22 @@ const LibraryViewer: React.FC<LibraryViewerProps> = ({ settings }) => {
                 )}
                 <div className="md:col-span-2">
                     {loading === 'content' && <Spinner message="Loading collection..." />}
-                    {(selectedFile || isViewAllActive) && !loading && books.length > 0 && (
+                    {(selectedCollection || isViewAllActive) && !loading && books.length > 0 && (
                         <div>
                             <h4 className="text-lg font-semibold text-gray-300 mb-4">
-                                {isEditMode ? `Editing: ${selectedFile?.name}` : (isViewAllActive ? `All Books (${books.length})` : `Contents of ${selectedFile?.name}`)}
+                                {isEditMode ? `Editing: ${selectedCollection}` : (isViewAllActive ? `All Books (${books.length})` : `Contents of ${selectedCollection}`)}
                             </h4>
                             {renderTable()}
                          </div>
                     )}
-                     {((selectedFile || isViewAllActive)) && !loading && books.length === 0 && !error && (
+                     {((selectedCollection || isViewAllActive)) && !loading && books.length === 0 && !error && (
                          isEditMode ? renderTable() : <p>This collection appears to be empty or in an incorrect format.</p>
                      )}
-                     {!selectedFile && !isViewAllActive && files.length > 0 && !loading && (
+                     {!selectedCollection && !isViewAllActive && collections.length > 0 && !loading && (
                         <div className="text-center py-10 px-4 h-full flex flex-col items-center justify-center">
                            <svg xmlns="http://www.w3.org/2000/svg" className="mx-auto h-12 w-12 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" /></svg>
                            <h3 className="mt-2 text-lg font-medium text-white">Select a Collection</h3>
-                           <p className="mt-1 text-sm text-gray-400">Choose a file from the list to view or edit its contents.</p>
+                           <p className="mt-1 text-sm text-gray-400">Choose a collection from the list to view or edit its contents.</p>
                        </div>
                      )}
                 </div>
