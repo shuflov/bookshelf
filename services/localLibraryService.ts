@@ -1,56 +1,63 @@
 
-import { LibraryFile } from '../types';
+import { Book } from '../types';
 
-const LIBRARY_STORAGE_KEY = 'localBookLibrary';
+const LIBRARY_KEY = 'localBookLibrary';
 
-// Helper to get the library from localStorage
-const getLibrary = (): Record<string, string> => {
+// Helper to get the full library object from localStorage
+const getLibrary = (): Record<string, Book[]> => {
     try {
-        const storedLibrary = localStorage.getItem(LIBRARY_STORAGE_KEY);
-        return storedLibrary ? JSON.parse(storedLibrary) : {};
+        const storedLibrary = localStorage.getItem(LIBRARY_KEY);
+        if (storedLibrary) {
+            return JSON.parse(storedLibrary);
+        }
     } catch (e) {
-        console.error("Failed to parse local library from localStorage", e);
-        return {};
+        console.error("Could not parse local library from localStorage", e);
+    }
+    return {};
+};
+
+// Helper to save the full library object to localStorage
+const saveLibrary = (library: Record<string, Book[]>) => {
+    try {
+        localStorage.setItem(LIBRARY_KEY, JSON.stringify(library));
+    } catch (e)
+        {
+        console.error("Could not save library to localStorage", e);
+        throw new Error("Failed to save to local storage. It might be full.");
     }
 };
 
-// Helper to save the library to localStorage
-const saveLibrary = (library: Record<string, string>): void => {
-    localStorage.setItem(LIBRARY_STORAGE_KEY, JSON.stringify(library));
+// Get a list of all collection names, sorted alphabetically
+export const getCollectionNames = (): string[] => {
+    const library = getLibrary();
+    return Object.keys(library).sort((a, b) => a.localeCompare(b));
 };
 
-export const saveCollectionToLocal = async (fileName: string, csvData: string): Promise<void> => {
+// Get all books from a specific collection
+export const getCollection = (name: string): Book[] | undefined => {
     const library = getLibrary();
-    library[fileName] = csvData;
+    return library[name];
+};
+
+// Save an array of books to a specific collection, overwriting if it exists
+export const saveCollection = (name: string, books: Book[]) => {
+    if (!name.trim()) {
+        throw new Error("Collection name cannot be empty.");
+    }
+    const library = getLibrary();
+    library[name] = books;
     saveLibrary(library);
 };
 
-export const listFilesFromLocal = async (): Promise<LibraryFile[]> => {
+// Delete a collection by name
+export const deleteCollection = (name: string) => {
     const library = getLibrary();
-    // We don't store created_at, so we'll sort by name.
-    // The id can also be the name since it's unique.
-    return Object.keys(library)
-        .map(name => ({
-            id: name,
-            name: name,
-        }))
-        .sort((a, b) => a.name.localeCompare(b.name)); // Sort alphabetically
+    delete library[name];
+    saveLibrary(library);
 };
 
-export const downloadFileContentFromLocal = async (fileName:string): Promise<string> => {
+// Get all books from all collections combined into a single array
+export const getAllBooks = (): Book[] => {
     const library = getLibrary();
-    if (library[fileName] !== undefined) {
-        return library[fileName];
-    }
-    throw new Error(`File "${fileName}" not found in local library.`);
-};
-
-export const deleteFileFromLocal = async (fileName: string): Promise<void> => {
-    const library = getLibrary();
-    if (library[fileName] !== undefined) {
-        delete library[fileName];
-        saveLibrary(library);
-    } else {
-        throw new Error(`File "${fileName}" not found in local library.`);
-    }
+    return Object.values(library).flat();
 };
