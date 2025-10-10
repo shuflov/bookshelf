@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { AppView, AppSettings } from './types';
 import Navigation from './components/Navigation';
@@ -17,7 +16,7 @@ const App: React.FC = () => {
       if (storedSettings) {
         const parsedSettings = JSON.parse(storedSettings);
         setSettings(parsedSettings);
-        // Restore check for apiKey. Force user to settings if it's missing.
+        // Force user to settings if the API key is missing.
         if (!parsedSettings.apiKey) {
           setCurrentView('settings');
         }
