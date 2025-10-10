@@ -1,4 +1,3 @@
-
 import { Book } from '../types';
 
 export const parseCSV = (csvText: string): Book[] => {
@@ -50,9 +49,22 @@ export const convertToCSV = (data: Book[]): string => {
     if (!data || data.length === 0) {
         return headers;
     }
+
+    // Helper to safely format a value for CSV by quoting it and escaping internal quotes.
+    const csvSafe = (value: any): string => {
+        return `"${String(value ?? '').replace(/"/g, '""')}"`;
+    };
+
     const rows = data.map(book => 
-      `"${String(book.title || '').replace(/"/g, '""')}","${String(book.author || '').replace(/"/g, '""')}",${book.publicationYear},"${String(book.genre || '').replace(/"/g, '""')}","${String(book.description || '').replace(/"/g, '""')}"`
+      [
+          csvSafe(book.title),
+          csvSafe(book.author),
+          csvSafe(book.publicationYear),
+          csvSafe(book.genre),
+          csvSafe(book.description)
+      ].join(',')
     );
+
     return [headers, ...rows].join('\n');
 };
 
