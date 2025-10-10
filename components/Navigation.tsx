@@ -5,7 +5,6 @@ import { AppView } from '../types';
 interface NavigationProps {
   currentView: AppView;
   onNavigate: (view: AppView) => void;
-  isLibraryEnabled: boolean;
 }
 
 const NavButton: React.FC<{
@@ -32,7 +31,7 @@ const NavButton: React.FC<{
 };
 
 
-const Navigation: React.FC<NavigationProps> = ({ currentView, onNavigate, isLibraryEnabled }) => {
+const Navigation: React.FC<NavigationProps> = ({ currentView, onNavigate }) => {
   return (
     <header className="flex flex-col sm:flex-row items-center justify-between gap-4 w-full">
        <div className="text-center sm:text-left">
@@ -58,7 +57,6 @@ const Navigation: React.FC<NavigationProps> = ({ currentView, onNavigate, isLibr
             view="library" 
             isActive={currentView === 'library'} 
             onClick={onNavigate}
-            isDisabled={!isLibraryEnabled}
           />
        </nav>
     </header>
