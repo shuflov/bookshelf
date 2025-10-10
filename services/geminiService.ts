@@ -1,29 +1,17 @@
+
 import { GoogleGenAI, Type } from "@google/genai";
 import { Book, GeminiBookResponse } from '../types';
 
 const bookSchema = {
   type: Type.OBJECT,
   properties: {
-    title: { 
-        type: Type.STRING,
-        description: "The full title of the book."
-    },
-    author: { 
-        type: Type.STRING,
-        description: "The full name of the author."
-    },
+    title: { type: Type.STRING },
+    author: { type: Type.STRING },
     publicationYear: {
-      type: Type.STRING,
-      description: "The year the book was first published."
+      type: Type.STRING
     },
-    genre: { 
-        type: Type.STRING,
-        description: "The primary literary genre of the book."
-    },
-    description: { 
-        type: Type.STRING,
-        description: "A concise, one-sentence description of the book's content or plot."
-    }
+    genre: { type: Type.STRING },
+    description: { type: Type.STRING }
   },
   required: ['title', 'author', 'publicationYear', 'genre', 'description']
 };
@@ -38,8 +26,14 @@ export const identifyBooksFromImage = async (apiKey: string, base64Image: string
   
   const textPart = {
     text: `
-      Analyze the provided image of books. For each distinct book visible, identify its details according to the provided JSON schema. 
-      If any piece of information cannot be determined from the image, use the string "Unknown".
+      Analyze the provided image containing books. Identify each distinct book visible. For each book, extract the following details with high accuracy:
+      1. The full title of the book.
+      2. The full name of the author.
+      3. The year the book was FIRST published.
+      4. The primary literary genre of the book (e.g., Fiction, Sci-Fi, History).
+      5. A concise, one-sentence description of the book's content or plot.
+
+      If any piece of information cannot be determined, use the string "Unknown". Return the data for all identified books in the specified JSON format.
     `
   };
 
