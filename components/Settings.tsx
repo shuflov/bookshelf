@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { AppSettings } from '../types';
 import ActionButton from './ActionButton';
@@ -17,7 +16,7 @@ const Settings: React.FC<SettingsProps> = ({ initialSettings, onSave }) => {
     onSave({
       apiKey: apiKey.trim() || undefined,
       supabaseUrl: supabaseUrl.trim() || undefined,
-      supabaseKey: supabaseKey.trim() || undefined
+      supabaseKey: supabaseKey.trim() || undefined,
     });
   };
 
@@ -28,66 +27,65 @@ const Settings: React.FC<SettingsProps> = ({ initialSettings, onSave }) => {
                 Configuration
             </h1>
             <p className="mt-2 text-lg text-gray-400">
-                Configure settings for the application.
+                Configure settings for the application. Your Gemini API Key is required.
             </p>
         </header>
 
-        <div className="space-y-6">
-             <div>
-                <h2 className="text-lg font-semibold text-gray-200">Google Gemini API Key (Required)</h2>
-                <p className="mt-1 text-sm text-gray-500">
-                    Enter your Google Gemini API key. For security, you must create a key that is restricted to this website's URL. See the README for instructions.
+        <div className="space-y-8">
+            {/* Gemini Settings */}
+            <div className="p-6 bg-gray-900/50 rounded-lg border border-gray-700">
+                <h2 className="text-xl font-semibold text-gray-200 mb-2">Gemini AI Settings</h2>
+                <p className="mt-1 text-sm text-gray-500 mb-4">
+                    This key is required to identify books from images. You can get one from Google AI Studio. The key is stored only in your browser's local storage.
                 </p>
-            </div>
-             <div>
                 <label htmlFor="apiKey" className="block text-sm font-medium text-gray-300 mb-2">
-                    Gemini API Key
+                    Your Gemini API Key (Required)
                 </label>
                 <input
                     type="password"
                     id="apiKey"
                     value={apiKey}
                     onChange={(e) => setApiKey(e.target.value)}
-                    className="w-full bg-gray-900 border border-gray-600 rounded-md px-3 py-2 text-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="Enter your restricted Gemini API key"
+                    className="w-full bg-gray-800 border border-gray-600 rounded-md px-3 py-2 text-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="Enter your Gemini API key"
                 />
             </div>
-            
-            <div className="border-t border-gray-700 my-6"></div>
 
-            <div>
-                <h2 className="text-lg font-semibold text-gray-200">Supabase (Optional)</h2>
-                <p className="mt-1 text-sm text-gray-500">
-                    Provide these details if you want to upload your book library to a Supabase Storage bucket. This enables the "My Library" feature.
+            {/* Supabase Settings */}
+            <div className="p-6 bg-gray-900/50 rounded-lg border border-gray-700">
+                <h2 className="text-xl font-semibold text-gray-200 mb-2">Cloud Library Storage (Optional)</h2>
+                <p className="mt-1 text-sm text-gray-500 mb-4">
+                    Optionally, provide your Supabase project details to save your library to the cloud and sync across devices. If left blank, your library will be saved locally in your browser.
+                    Requires a Supabase project with a storage bucket named <code className="text-xs bg-gray-700 p-1 rounded">library</code>.
                 </p>
-            </div>
-
-            <div>
-                <label htmlFor="supabaseUrl" className="block text-sm font-medium text-gray-300 mb-2">
-                    Supabase Project URL
-                </label>
-                <input
-                    type="url"
-                    id="supabaseUrl"
-                    value={supabaseUrl}
-                    onChange={(e) => setSupabaseUrl(e.target.value)}
-                    className="w-full bg-gray-900 border border-gray-600 rounded-md px-3 py-2 text-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="https://your-project-ref.supabase.co"
-                />
-            </div>
-            
-            <div>
-                <label htmlFor="supabaseKey" className="block text-sm font-medium text-gray-300 mb-2">
-                    Supabase Anon Key
-                </label>
-                <input
-                    type="password"
-                    id="supabaseKey"
-                    value={supabaseKey}
-                    onChange={(e) => setSupabaseKey(e.target.value)}
-                    className="w-full bg-gray-900 border border-gray-600 rounded-md px-3 py-2 text-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="Enter your Supabase anon key"
-                />
+                <div className="space-y-4">
+                    <div>
+                        <label htmlFor="supabaseUrl" className="block text-sm font-medium text-gray-300 mb-2">
+                            Supabase Project URL
+                        </label>
+                        <input
+                            type="text"
+                            id="supabaseUrl"
+                            value={supabaseUrl}
+                            onChange={(e) => setSupabaseUrl(e.target.value)}
+                            className="w-full bg-gray-800 border border-gray-600 rounded-md px-3 py-2 text-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            placeholder="https://your-project-id.supabase.co"
+                        />
+                    </div>
+                    <div>
+                        <label htmlFor="supabaseKey" className="block text-sm font-medium text-gray-300 mb-2">
+                            Supabase Anon Key
+                        </label>
+                        <input
+                            type="password"
+                            id="supabaseKey"
+                            value={supabaseKey}
+                            onChange={(e) => setSupabaseKey(e.target.value)}
+                            className="w-full bg-gray-800 border border-gray-600 rounded-md px-3 py-2 text-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            placeholder="Enter your Supabase public anon key"
+                        />
+                    </div>
+                </div>
             </div>
 
             <div className="flex justify-end gap-4 pt-4">
