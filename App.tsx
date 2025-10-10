@@ -10,7 +10,6 @@ import Spinner from './components/Spinner';
 const App: React.FC = () => {
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [currentView, setCurrentView] = useState<AppView>('upload');
-  const [forceSettingsView, setForceSettingsView] = useState(false);
 
   useEffect(() => {
     try {
@@ -18,53 +17,38 @@ const App: React.FC = () => {
       if (storedSettings) {
         const parsedSettings = JSON.parse(storedSettings);
         setSettings(parsedSettings);
+        // Restore check for apiKey. Force user to settings if it's missing.
         if (!parsedSettings.apiKey) {
-            setCurrentView('settings');
-            setForceSettingsView(true);
+          setCurrentView('settings');
         }
       } else {
+        // No settings found, start on the settings page.
         setSettings({});
         setCurrentView('settings');
-        setForceSettingsView(true);
       }
     } catch (e) {
       console.error("Could not parse settings from localStorage", e);
       setSettings({});
       setCurrentView('settings');
-      setForceSettingsView(true);
     }
   }, []);
 
   const handleSaveSettings = (newSettings: AppSettings) => {
     localStorage.setItem('appSettings', JSON.stringify(newSettings));
     setSettings(newSettings);
-    
-    // Only navigate away automatically on the first mandatory setup.
-    if (forceSettingsView && newSettings.apiKey) {
-        setForceSettingsView(false);
-        setCurrentView('upload');
+    // If we were on the settings page, move to the upload page after saving, but only if the API key is now present.
+    if (currentView === 'settings' && newSettings.apiKey) {
+      setCurrentView('upload');
     }
   };
 
   const renderCurrentView = () => {
-    if (!settings) return null;
-
-    if (forceSettingsView && currentView !== 'settings') {
-        return <Settings initialSettings={settings} onSave={handleSaveSettings} />;
-    }
+    if (!settings) return null; // Should be covered by the main loading spinner
 
     switch (currentView) {
       case 'settings':
         return <Settings initialSettings={settings} onSave={handleSaveSettings} />;
       case 'upload':
-        if (!settings.apiKey) {
-            return (
-                 <div className="text-center p-8">
-                    <h2 className="text-2xl font-bold text-red-400 mb-4">Configuration Needed</h2>
-                    <p className="text-gray-400">Please go to the "Settings" page to enter your Google Gemini API Key.</p>
-                </div>
-            );
-        }
         return <UploadView settings={settings} />;
       case 'library':
         return <LibraryViewer settings={settings} />;
@@ -86,12 +70,7 @@ const App: React.FC = () => {
       <div className="w-full max-w-6xl mx-auto">
         <Navigation 
           currentView={currentView}
-          onNavigate={(view) => {
-              if (!forceSettingsView) {
-                  setCurrentView(view)
-              }
-          }}
-          isLibraryEnabled={!!(settings.supabaseUrl && settings.supabaseKey)}
+          onNavigate={setCurrentView}
         />
         <main className={`bg-gray-800/50 rounded-xl shadow-2xl p-6 md:p-10 border border-gray-700 mt-8`}>
           {renderCurrentView()}
