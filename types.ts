@@ -1,3 +1,6 @@
+
+import { FileObject as SupabaseFileObject } from '@supabase/storage-js';
+
 export interface Book {
   title: string;
   author: string;
@@ -29,3 +32,5 @@ export interface AppSettings {
 }
 
 export type AppView = 'settings' | 'upload' | 'library';
+
+export type LibraryFile = Pick<SupabaseFileObject, 'id' | 'name'>;
