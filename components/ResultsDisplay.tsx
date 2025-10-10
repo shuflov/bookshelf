@@ -1,10 +1,10 @@
 
 import React, { useState, useEffect } from 'react';
-import { Book, AppSettings } from '../types';
+import { Book, AppSettings, LibraryFile } from '../types';
 import ActionButton from './ActionButton';
-import { uploadCsvToSupabase, listFilesFromLibrary, downloadFileContent } from '../services/supabaseService';
+import { uploadCsvToSupabase, listFilesFromLibrary, downloadFileContent as downloadFileFromSupabase } from '../services/supabaseService';
+import { saveCollectionToLocal, listFilesFromLocal, downloadFileContentFromLocal } from '../services/localLibraryService';
 import { convertToCSV, parseCSV, mergeBooks } from '../utils/csvHelper';
-import { FileObject } from '@supabase/storage-js';
 import Spinner from './Spinner';
 
 interface ResultsDisplayProps {
@@ -19,7 +19,7 @@ interface ResultsDisplayProps {
 const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ imageSrc, books, onReset, settings, lastSavedCollection, onSaveSuccess }) => {
   const [showSaveUI, setShowSaveUI] = useState(false);
   const [saveMode, setSaveMode] = useState<'new' | 'existing'>('new');
-  const [collections, setCollections] = useState<FileObject[]>([]);
+  const [collections, setCollections] = useState<LibraryFile[]>([]);
   const [collectionsLoading, setCollectionsLoading] = useState(false);
   const [selectedCollection, setSelectedCollection] = useState('');
   const [newCollectionName, setNewCollectionName] = useState('');
@@ -48,15 +48,19 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ imageSrc, books, onRese
   };
 
   useEffect(() => {
-    if (!showSaveUI || !settings?.supabaseUrl || !settings?.supabaseKey) {
-        setCollections([]);
+    if (!showSaveUI) {
         return;
     }
 
     const fetchCollections = async () => {
         setCollectionsLoading(true);
         try {
-            const files = await listFilesFromLibrary(settings.supabaseUrl!, settings.supabaseKey!);
+            let files;
+            if (settings?.supabaseUrl && settings?.supabaseKey) {
+                files = await listFilesFromLibrary(settings.supabaseUrl, settings.supabaseKey);
+            } else {
+                files = await listFilesFromLocal();
+            }
             const csvFiles = files.filter(f => f.name.endsWith('.csv'));
             setCollections(csvFiles);
 
@@ -83,11 +87,6 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ imageSrc, books, onRese
   }, [showSaveUI, settings, lastSavedCollection]);
 
   const handleSaveToLibrary = async () => {
-    if (!settings?.supabaseUrl || !settings?.supabaseKey) {
-        setSaveStatus('error');
-        setSaveMessage("Supabase credentials not found.");
-        return;
-    }
     setSaveStatus('saving');
     setSaveMessage('');
 
@@ -101,32 +100,45 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ imageSrc, books, onRese
             const fileName = newCollectionName.trim().endsWith('.csv') ? newCollectionName.trim() : `${newCollectionName.trim()}.csv`;
             savedCollectionName = fileName;
             const csvData = convertToCSV(books);
-            await uploadCsvToSupabase(csvData, fileName, settings.supabaseUrl, settings.supabaseKey);
+            if (settings?.supabaseUrl && settings?.supabaseKey) {
+                await uploadCsvToSupabase(csvData, fileName, settings.supabaseUrl, settings.supabaseKey);
+            } else {
+                await saveCollectionToLocal(fileName, csvData);
+            }
             setSaveStatus('success');
-            setSaveMessage(`Successfully created and saved to "${fileName}". Redirecting...`);
+            setSaveMessage(`Successfully created and saved to "${fileName}".`);
         } else { // 'existing'
             if (!selectedCollection) {
                 throw new Error("Please select a collection to add to.");
             }
             savedCollectionName = selectedCollection;
-            const existingContent = await downloadFileContent(selectedCollection, settings.supabaseUrl, settings.supabaseKey);
+            
+            let existingContent: string;
+            if (settings?.supabaseUrl && settings?.supabaseKey) {
+                 existingContent = await downloadFileFromSupabase(selectedCollection, settings.supabaseUrl, settings.supabaseKey);
+            } else {
+                existingContent = await downloadFileContentFromLocal(selectedCollection);
+            }
+
             const existingBooks = parseCSV(existingContent);
             const { mergedBooks, addedCount } = mergeBooks(existingBooks, books);
             const csvData = convertToCSV(mergedBooks);
-            await uploadCsvToSupabase(csvData, selectedCollection, settings.supabaseUrl, settings.supabaseKey);
+
+            if (settings?.supabaseUrl && settings?.supabaseKey) {
+                await uploadCsvToSupabase(csvData, selectedCollection, settings.supabaseUrl, settings.supabaseKey);
+            } else {
+                await saveCollectionToLocal(selectedCollection, csvData);
+            }
+            
             setSaveStatus('success');
             if (addedCount === 0) {
-                setSaveMessage(`Collection "${selectedCollection}" is already up-to-date. Redirecting...`);
+                setSaveMessage(`Collection "${selectedCollection}" is already up-to-date.`);
             } else {
-                setSaveMessage(`Added ${addedCount} new book(s) to "${selectedCollection}". Total is now ${mergedBooks.length}. Redirecting...`);
+                setSaveMessage(`Added ${addedCount} new book(s) to "${selectedCollection}". Total is now ${mergedBooks.length}.`);
             }
         }
         onSaveSuccess(savedCollectionName);
         setNewCollectionName('');
-
-        setTimeout(() => {
-            onReset();
-        }, 2500);
 
     } catch (err) {
       setSaveStatus('error');
@@ -135,8 +147,6 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ imageSrc, books, onRese
       console.error(err);
     }
   };
-
-  const showSupabaseButton = settings?.supabaseUrl && settings?.supabaseKey;
 
   return (
     <div className={`grid grid-cols-1 ${imageSrc ? 'lg:grid-cols-2' : ''} gap-8 animate-fade-in`}>
@@ -183,19 +193,17 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ imageSrc, books, onRese
         
         <div className="mt-6 flex flex-col sm:flex-row gap-4">
           <ActionButton onClick={handleDownload} text="Download CSV" primary={false} />
-          {showSupabaseButton && (
-            <ActionButton
-              onClick={handleToggleSaveUI}
-              text="Save to Library"
-              primary={false}
-            />
-          )}
+          <ActionButton
+            onClick={handleToggleSaveUI}
+            text="Save to Library"
+            primary={false}
+          />
           <ActionButton onClick={onReset} text="Add More Books" primary={true} />
         </div>
 
         {showSaveUI && (
           <div className="mt-6 p-6 bg-gray-900/50 rounded-lg border border-gray-700 animate-fade-in">
-              <h4 className="text-lg font-semibold text-gray-200 mb-4">Save to Supabase Library</h4>
+              <h4 className="text-lg font-semibold text-gray-200 mb-4">Save to {settings?.supabaseUrl ? 'Supabase' : 'Local'} Library</h4>
               {collectionsLoading ? <Spinner message="Loading collections..." /> : (
                   <div className="space-y-4">
                       <div className="flex gap-4">
