@@ -48,9 +48,10 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ imageSrc, books, onRese
       setSaveMessage('');
   };
 
+  // Effect 1: Fetch collections when the save UI is opened.
   useEffect(() => {
     if (!showSaveUI) {
-        setCollections([]);
+        setCollections([]); // Clear collections when UI is hidden
         return;
     }
 
@@ -65,18 +66,6 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ imageSrc, books, onRese
                 collectionNames = getCollectionNames();
             }
             setCollections(collectionNames);
-
-            const lastSavedExists = lastSavedCollection && collectionNames.includes(lastSavedCollection);
-
-            if (lastSavedExists) {
-                setSaveMode('existing');
-                setSelectedCollection(lastSavedCollection!);
-            } else if (collectionNames.length > 0) {
-                setSaveMode('existing');
-                setSelectedCollection(collectionNames[0]);
-            } else {
-                setSaveMode('new');
-            }
         } catch (error) {
             setSaveStatus('error');
             const errorMessage = error instanceof Error ? `Error: ${error.message}` : 'Could not fetch existing collections.';
@@ -87,7 +76,28 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ imageSrc, books, onRese
     };
 
     fetchCollections();
-  }, [showSaveUI, lastSavedCollection, useSupabase, settings]);
+  }, [showSaveUI, useSupabase, settings]);
+
+  // Effect 2: Set the default selection state after collections have been loaded.
+  useEffect(() => {
+    if (collectionsLoading || !showSaveUI) {
+      return; // Wait until loading is finished and UI is visible
+    }
+
+    const lastSavedExists = lastSavedCollection && collections.includes(lastSavedCollection);
+
+    if (lastSavedExists) {
+      setSaveMode('existing');
+      setSelectedCollection(lastSavedCollection!);
+    } else if (collections.length > 0) {
+      setSaveMode('existing');
+      setSelectedCollection(collections[0]);
+    } else {
+      setSaveMode('new');
+      setSelectedCollection(''); // Clear selection if no collections exist
+    }
+  }, [collections, collectionsLoading, showSaveUI, lastSavedCollection]);
+
 
   const handleSaveToLibrary = async () => {
     setSaveStatus('saving');
