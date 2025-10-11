@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { Book, UploadState, AppSettings } from '../types';
 import { identifyBooksFromImage } from '../services/geminiService';
 import { parseCSV } from '../utils/csvHelper';
@@ -21,11 +21,10 @@ const UploadView: React.FC<UploadViewProps> = ({ settings }) => {
   const resultsRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (uploadState === UploadState.RESULTS) {
-      const timer = setTimeout(() => {
+    if (uploadState === UploadState.RESULTS && resultsRef.current) {
+      setTimeout(() => {
         resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }, 100);
-      return () => clearTimeout(timer);
     }
   }, [uploadState]);
 
@@ -47,7 +46,7 @@ const UploadView: React.FC<UploadViewProps> = ({ settings }) => {
       setUploadedImage(reader.result as string);
 
       try {
-        const identifiedBooks = await identifyBooksFromImage(settings.apiKey, base64Image, file.type);
+        const identifiedBooks = await identifyBooksFromImage(base64Image, file.type, settings.apiKey!);
         if (identifiedBooks && identifiedBooks.length > 0) {
           setBooks(identifiedBooks);
           setUploadState(UploadState.RESULTS);
@@ -129,15 +128,18 @@ const UploadView: React.FC<UploadViewProps> = ({ settings }) => {
     case UploadState.PROCESSING:
       return <Spinner message="Processing your file..." />;
     case UploadState.RESULTS:
-      return <ResultsDisplay
-                ref={resultsRef}
-                imageSrc={uploadedImage}
-                books={books}
-                onReset={handleReset}
-                settings={settings}
-                lastSavedCollection={lastSavedCollection}
-                onSaveSuccess={setLastSavedCollection}
-             />;
+      return (
+        <div ref={resultsRef}>
+          <ResultsDisplay
+            imageSrc={uploadedImage}
+            books={books}
+            onReset={handleReset}
+            settings={settings}
+            lastSavedCollection={lastSavedCollection}
+            onSaveSuccess={setLastSavedCollection}
+          />
+        </div>
+      );
     case UploadState.ERROR:
       return <ErrorDisplay message={error || "An unknown error occurred."} onReset={handleReset} />;
     default:
