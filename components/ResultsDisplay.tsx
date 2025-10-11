@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Book, AppSettings } from '../types';
 import ActionButton from './ActionButton';
 import { getCollectionNames, getCollection, saveCollection } from '../services/localLibraryService';
@@ -27,6 +27,7 @@ const ResultsDisplay = React.forwardRef<HTMLDivElement, ResultsDisplayProps>(
     const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'success' | 'error'>('idle');
     const [saveMessage, setSaveMessage] = useState<string>('');
     
+    const saveUIRef = useRef<HTMLDivElement>(null);
     const useSupabase = !!(settings?.supabaseUrl && settings?.supabaseKey);
 
     const handleDownload = () => {
@@ -48,6 +49,15 @@ const ResultsDisplay = React.forwardRef<HTMLDivElement, ResultsDisplayProps>(
         setSaveStatus('idle');
         setSaveMessage('');
     };
+
+    // Effect for scrolling when save UI is shown
+    useEffect(() => {
+      if (showSaveUI && saveUIRef.current) {
+        setTimeout(() => {
+          saveUIRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }, 100);
+      }
+    }, [showSaveUI]);
 
     // Effect 1: Fetch collections when the save UI is opened.
     useEffect(() => {
@@ -215,7 +225,7 @@ const ResultsDisplay = React.forwardRef<HTMLDivElement, ResultsDisplayProps>(
           </div>
 
           {showSaveUI && (
-            <div className="mt-6 p-6 bg-gray-900/50 rounded-lg border border-gray-700 animate-fade-in">
+            <div ref={saveUIRef} className="mt-6 p-6 bg-gray-900/50 rounded-lg border border-gray-700 animate-fade-in">
                 <h4 className="text-lg font-semibold text-gray-200 mb-4">Save to {useSupabase ? 'Cloud' : 'Local'} Library</h4>
                 {collectionsLoading ? <Spinner message="Loading collections..." /> : (
                     <div className="space-y-4">
