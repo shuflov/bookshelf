@@ -23,8 +23,8 @@ const UploadView: React.FC<UploadViewProps> = ({ settings }) => {
   useEffect(() => {
     if (uploadState === UploadState.RESULTS && resultsRef.current) {
       setTimeout(() => {
-        resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }, 100);
+        resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 300);
     }
   }, [uploadState]);
 
