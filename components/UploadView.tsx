@@ -1,5 +1,4 @@
-
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { Book, UploadState, AppSettings } from '../types';
 import { identifyBooksFromImage } from '../services/geminiService';
 import { parseCSV } from '../utils/csvHelper';
@@ -19,6 +18,16 @@ const UploadView: React.FC<UploadViewProps> = ({ settings }) => {
   const [books, setBooks] = useState<Book[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [lastSavedCollection, setLastSavedCollection] = useState<string | null>(null);
+  const resultsRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (uploadState === UploadState.RESULTS) {
+      const timer = setTimeout(() => {
+        resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [uploadState]);
 
   const handleImageUpload = useCallback(async (file: File) => {
     if (!settings.apiKey) {
@@ -38,7 +47,7 @@ const UploadView: React.FC<UploadViewProps> = ({ settings }) => {
       setUploadedImage(reader.result as string);
 
       try {
-        const identifiedBooks = await identifyBooksFromImage(base64Image, file.type, settings.apiKey!);
+        const identifiedBooks = await identifyBooksFromImage(settings.apiKey, base64Image, file.type);
         if (identifiedBooks && identifiedBooks.length > 0) {
           setBooks(identifiedBooks);
           setUploadState(UploadState.RESULTS);
@@ -121,6 +130,7 @@ const UploadView: React.FC<UploadViewProps> = ({ settings }) => {
       return <Spinner message="Processing your file..." />;
     case UploadState.RESULTS:
       return <ResultsDisplay
+                ref={resultsRef}
                 imageSrc={uploadedImage}
                 books={books}
                 onReset={handleReset}
