@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { AppView, AppSettings } from './types';
 import Navigation from './components/Navigation';
 import Settings from './components/Settings';
@@ -9,6 +9,7 @@ import Spinner from './components/Spinner';
 const App: React.FC = () => {
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [currentView, setCurrentView] = useState<AppView>('upload');
+  const [libraryRefreshKey, setLibraryRefreshKey] = useState(0);
 
   useEffect(() => {
     try {
@@ -41,21 +42,26 @@ const App: React.FC = () => {
     }
   };
 
-  const renderCurrentView = () => {
-    if (!settings) return null; // Should be covered by the main loading spinner
+  const handleLibraryUpdated = () => {
+    // Increment the key to force LibraryViewer to remount and reload data
+    setLibraryRefreshKey(prev => prev + 1);
+  };
 
+  const renderCurrentView = () => {
+    if (!settings) return null;
+    
     switch (currentView) {
       case 'settings':
         return <Settings initialSettings={settings} onSave={handleSaveSettings} />;
       case 'upload':
-        return <UploadView settings={settings} />;
+        return <UploadView settings={settings} onLibraryUpdated={handleLibraryUpdated} />;
       case 'library':
-        return <LibraryViewer settings={settings} />;
+        return <LibraryViewer settings={settings} key={libraryRefreshKey} />;
       default:
         return null;
     }
   };
-  
+
   if (settings === null) {
     return (
       <div className="min-h-screen bg-gray-900 flex items-center justify-center">
@@ -67,11 +73,8 @@ const App: React.FC = () => {
   return (
     <div className="min-h-screen bg-gray-900 text-gray-100 flex flex-col items-center p-4 sm:p-6 lg:p-8">
       <div className="w-full max-w-6xl mx-auto">
-        <Navigation 
-          currentView={currentView}
-          onNavigate={setCurrentView}
-        />
-        <main className={`bg-gray-800/50 rounded-xl shadow-2xl p-6 md:p-10 border border-gray-700 mt-8`}>
+        <Navigation currentView={currentView} onNavigate={setCurrentView} />
+        <main className="bg-gray-800/50 rounded-xl shadow-2xl p-6 md:p-10 border border-gray-700 mt-8">
           {renderCurrentView()}
         </main>
         <footer className="text-center mt-8 text-gray-500 text-sm">
