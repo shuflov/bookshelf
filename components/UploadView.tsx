@@ -1,5 +1,4 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
-import { SupabaseClient } from '@supabase/supabase-js';
 import { Book, UploadState, AppSettings } from '../types';
 import { identifyBooksFromImage } from '../services/geminiService';
 import { parseCSV } from '../utils/csvHelper';
@@ -10,12 +9,11 @@ import ErrorDisplay from './ErrorDisplay';
 import CameraCapture from './CameraCapture';
 
 interface UploadViewProps {
-  settings: AppSettings;
-  supabaseClient: SupabaseClient;
-  onLibraryUpdated?: () => void;
+    settings: AppSettings;
+    onLibraryUpdated?: () => void;
 }
 
-const UploadView: React.FC<UploadViewProps> = ({ settings, supabaseClient, onLibraryUpdated }) => {
+const UploadView: React.FC<UploadViewProps> = ({ settings, onLibraryUpdated }) => {
   const [uploadState, setUploadState] = useState<UploadState>(UploadState.IDLE);
   const [uploadedImage, setUploadedImage] = useState<string | null>(null);
   const [books, setBooks] = useState<Book[]>([]);
@@ -68,7 +66,7 @@ const UploadView: React.FC<UploadViewProps> = ({ settings, supabaseClient, onLib
       setUploadState(UploadState.ERROR);
     };
   }, [settings.apiKey]);
-
+  
   const handleTextFileUpload = useCallback(async (file: File) => {
     setUploadState(UploadState.PROCESSING);
     setError(null);
@@ -78,21 +76,21 @@ const UploadView: React.FC<UploadViewProps> = ({ settings, supabaseClient, onLib
     const reader = new FileReader();
     reader.readAsText(file);
     reader.onload = () => {
-      try {
-        const content = reader.result as string;
-        const parsedBooks = parseCSV(content);
-        if (parsedBooks && parsedBooks.length > 0) {
-          setBooks(parsedBooks);
-          setUploadState(UploadState.RESULTS);
-        } else {
-          setError("Could not parse any books from the file. Please check the format.");
-          setUploadState(UploadState.ERROR);
+        try {
+            const content = reader.result as string;
+            const parsedBooks = parseCSV(content);
+             if (parsedBooks && parsedBooks.length > 0) {
+                setBooks(parsedBooks);
+                setUploadState(UploadState.RESULTS);
+            } else {
+                setError("Could not parse any books from the file. Please check the format.");
+                setUploadState(UploadState.ERROR);
+            }
+        } catch (err) {
+            console.error("Error parsing file:", err);
+            setError("An error occurred while parsing the file.");
+            setUploadState(UploadState.ERROR);
         }
-      } catch (err) {
-        console.error("Error parsing file:", err);
-        setError("An error occurred while parsing the file.");
-        setUploadState(UploadState.ERROR);
-      }
     };
     reader.onerror = () => {
       setError("Failed to read the uploaded text file.");
@@ -103,12 +101,12 @@ const UploadView: React.FC<UploadViewProps> = ({ settings, supabaseClient, onLib
   const handleFileUpload = (file: File) => {
     const fileType = file.type;
     if (fileType.startsWith('image/')) {
-      handleImageUpload(file);
+        handleImageUpload(file);
     } else if (fileType === 'text/csv' || fileType === 'text/plain' || file.name.endsWith('.csv') || file.name.endsWith('.txt')) {
-      handleTextFileUpload(file);
+        handleTextFileUpload(file);
     } else {
-      setError(`Unsupported file type: ${fileType}. Please upload an image, CSV, or TXT file.`);
-      setUploadState(UploadState.ERROR);
+        setError(`Unsupported file type: ${fileType}. Please upload an image, CSV, or TXT file.`);
+        setUploadState(UploadState.ERROR);
     }
   };
 
@@ -138,7 +136,6 @@ const UploadView: React.FC<UploadViewProps> = ({ settings, supabaseClient, onLib
           books={books}
           onReset={handleReset}
           settings={settings}
-          supabaseClient={supabaseClient}
           lastSavedCollection={lastSavedCollection}
           onSaveSuccess={setLastSavedCollection}
           onLibraryUpdated={onLibraryUpdated}
