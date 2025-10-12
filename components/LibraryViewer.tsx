@@ -1,27 +1,24 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { SupabaseClient } from '@supabase/supabase-js';
 import { AppSettings, Book } from '../types';
 import { 
     getCollectionNames, 
     getCollection, 
     deleteCollection, 
     saveCollection, 
-    getAllBooks as getAllLocalBooks
+    getAllLocalBooks
 } from '../services/localLibraryService';
-import { 
-    listFilesFromLibrary, 
-    downloadFileContent, 
-    deleteFileFromLibrary,
-    uploadCsvToSupabase
-} from '../services/supabaseService';
 import { parseCSV, convertToCSV } from '../utils/csvHelper';
 import Spinner from './Spinner';
 import ActionButton from './ActionButton';
 
 interface LibraryViewerProps {
     settings: AppSettings | null;
+    supabaseClient: SupabaseClient;
+    key: number;
 }
 
-const LibraryViewer: React.FC<LibraryViewerProps> = ({ settings }) => {
+const LibraryViewer: React.FC<LibraryViewerProps> = ({ settings, supabaseClient, key }) => {
     const [collections, setCollections] = useState<string[]>([]);
     const [selectedCollection, setSelectedCollection] = useState<string | null>(null);
     const [books, setBooks] = useState<Book[]>([]);
@@ -49,11 +46,21 @@ const LibraryViewer: React.FC<LibraryViewerProps> = ({ settings }) => {
             const counts: Record<string, number> = {};
             let names: string[];
             if (useSupabase) {
-                const files = await listFilesFromLibrary(settings!.supabaseUrl!, settings!.supabaseKey!);
+                const { data: files, error } = await supabaseClient.storage
+                    .from('library')
+                    .list('', { sortBy: { column: 'created_at', order: 'desc' } });
+                if (error) {
+                    throw new Error(`Failed to list files: ${error.message}`);
+                }
                 names = files.map(f => f.name.replace(/\.csv$/, ''));
-                // Fetch content to get counts - could be slow for many files
                 const countPromises = files.map(async (file) => {
-                    const content = await downloadFileContent(file.name, settings!.supabaseUrl!, settings!.supabaseKey!);
+                    const { data, error } = await supabaseClient.storage
+                        .from('library')
+                        .download(file.name);
+                    if (error) {
+                        throw new Error(`Failed to download ${file.name}: ${error.message}`);
+                    }
+                    const content = await data.text();
                     return { name: file.name.replace(/\.csv$/, ''), count: parseCSV(content).length };
                 });
                 const resolvedCounts = await Promise.all(countPromises);
@@ -75,7 +82,7 @@ const LibraryViewer: React.FC<LibraryViewerProps> = ({ settings }) => {
             setLoading(false);
             setInitialLoadComplete(true);
         }
-    }, [useSupabase, settings]);
+    }, [useSupabase, settings, supabaseClient]);
 
     const handleViewAll = useCallback(async () => {
         setLoading('content');
@@ -88,8 +95,21 @@ const LibraryViewer: React.FC<LibraryViewerProps> = ({ settings }) => {
         try {
             let allBooks: Book[];
             if (useSupabase) {
-                const files = await listFilesFromLibrary(settings!.supabaseUrl!, settings!.supabaseKey!);
-                const contentPromises = files.map(f => downloadFileContent(f.name, settings!.supabaseUrl!, settings!.supabaseKey!));
+                const { data: files, error } = await supabaseClient.storage
+                    .from('library')
+                    .list('', { sortBy: { column: 'created_at', order: 'desc' } });
+                if (error) {
+                    throw new Error(`Failed to list files: ${error.message}`);
+                }
+                const contentPromises = files.map(async (file) => {
+                    const { data, error } = await supabaseClient.storage
+                        .from('library')
+                        .download(file.name);
+                    if (error) {
+                        throw new Error(`Failed to download ${file.name}: ${error.message}`);
+                    }
+                    return data.text();
+                });
                 const allCsvs = await Promise.all(contentPromises);
                 allBooks = allCsvs.flatMap(csv => parseCSV(csv));
             } else {
@@ -104,11 +124,11 @@ const LibraryViewer: React.FC<LibraryViewerProps> = ({ settings }) => {
         } finally {
             setLoading(false);
         }
-    }, [useSupabase, settings]);
+    }, [useSupabase, supabaseClient]);
 
     useEffect(() => {
         loadCollections();
-    }, [loadCollections]);
+    }, [loadCollections, key]);
 
     useEffect(() => {
         if (initialLoadComplete && collections.length > 0 && !isViewAllActive && !selectedCollection) {
@@ -129,7 +149,13 @@ const LibraryViewer: React.FC<LibraryViewerProps> = ({ settings }) => {
         try {
             let collectionBooks: Book[];
             if (useSupabase) {
-                const csvContent = await downloadFileContent(`${name}.csv`, settings!.supabaseUrl!, settings!.supabaseKey!);
+                const { data, error } = await supabaseClient.storage
+                    .from('library')
+                    .download(`${name}.csv`);
+                if (error) {
+                    throw new Error(`Failed to download ${name}.csv: ${error.message}`);
+                }
+                const csvContent = await data.text();
                 collectionBooks = parseCSV(csvContent);
             } else {
                 collectionBooks = getCollection(name) || [];
@@ -148,7 +174,12 @@ const LibraryViewer: React.FC<LibraryViewerProps> = ({ settings }) => {
         if (window.confirm(`Are you sure you want to delete "${collectionName}"? This action cannot be undone.`)) {
             try {
                 if (useSupabase) {
-                    await deleteFileFromLibrary(`${collectionName}.csv`, settings!.supabaseUrl!, settings!.supabaseKey!);
+                    const { error } = await supabaseClient.storage
+                        .from('library')
+                        .remove([`${collectionName}.csv`]);
+                    if (error) {
+                        throw new Error(`Failed to delete ${collectionName}.csv: ${error.message}`);
+                    }
                 } else {
                     deleteCollection(collectionName);
                 }
@@ -201,7 +232,14 @@ const LibraryViewer: React.FC<LibraryViewerProps> = ({ settings }) => {
         try {
             if (useSupabase) {
                 const csvData = convertToCSV(books);
-                await uploadCsvToSupabase(csvData, `${selectedCollection}.csv`, settings!.supabaseUrl!, settings!.supabaseKey!);
+                const blob = new Blob([csvData], { type: 'text/csv;charset=utf-8;' });
+                const { data, error } = await supabaseClient.storage
+                    .from('library')
+                    .upload(`${selectedCollection}.csv`, blob, { upsert: true });
+                if (error) {
+                    throw new Error(`Failed to upload ${selectedCollection}.csv: ${error.message}`);
+                }
+                console.log("Supabase upload successful:", data);
             } else {
                 saveCollection(selectedCollection, books);
             }
