@@ -13,10 +13,11 @@ interface ResultsDisplayProps {
   settings: AppSettings | null;
   lastSavedCollection: string | null;
   onSaveSuccess: (collectionName: string) => void;
+  onLibraryUpdated?: () => void;
 }
 
 const ResultsDisplay = React.forwardRef<HTMLDivElement, ResultsDisplayProps>(
-  ({ imageSrc, books, onReset, settings, lastSavedCollection, onSaveSuccess }, ref) => {
+  ({ imageSrc, books, onReset, settings, lastSavedCollection, onSaveSuccess, onLibraryUpdated }, ref) => {
     const [showSaveUI, setShowSaveUI] = useState(false);
     const [saveMode, setSaveMode] = useState<'new' | 'existing'>('new');
     const [collections, setCollections] = useState<string[]>([]);
@@ -156,6 +157,7 @@ const ResultsDisplay = React.forwardRef<HTMLDivElement, ResultsDisplayProps>(
           setSaveStatus('success');
           setSaveMessage(successMessage);
           onSaveSuccess(collectionName);
+          onLibraryUpdated?.();
           setNewCollectionName('');
 
           setTimeout(() => {
