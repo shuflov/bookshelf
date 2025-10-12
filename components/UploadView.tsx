@@ -130,17 +130,16 @@ const UploadView: React.FC<UploadViewProps> = ({ settings, onLibraryUpdated }) =
       return <Spinner message="Processing your file..." />;
     case UploadState.RESULTS:
       return (
-        <div ref={resultsRef}>
-          <ResultsDisplay
-            imageSrc={uploadedImage}
-            books={books}
-            onReset={handleReset}
-            settings={settings}
-            lastSavedCollection={lastSavedCollection}
-            onSaveSuccess={setLastSavedCollection}
-            onLibraryUpdated={onLibraryUpdated}
-          />
-        </div>
+        <ResultsDisplay
+          ref={resultsRef}
+          imageSrc={uploadedImage}
+          books={books}
+          onReset={handleReset}
+          settings={settings}
+          lastSavedCollection={lastSavedCollection}
+          onSaveSuccess={setLastSavedCollection}
+          onLibraryUpdated={onLibraryUpdated}
+        />
       );
     case UploadState.ERROR:
       return <ErrorDisplay message={error || "An unknown error occurred."} onReset={handleReset} />;
