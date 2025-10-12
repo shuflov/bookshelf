@@ -114,31 +114,50 @@ const ResultsDisplay = React.forwardRef<HTMLDivElement, ResultsDisplayProps>(
     const handleSaveToLibrary = async () => {
       setSaveStatus('saving');
       setSaveMessage('');
-
+    
       try {
           const collectionName = saveMode === 'new' ? newCollectionName.trim() : selectedCollection;
+          console.log('💾 Starting save:', { collectionName, saveMode, bookCount: books.length });
+          
           if (!collectionName) {
               throw new Error(saveMode === 'new' ? "Please provide a name for the new collection." : "Please select a collection to add to.");
           }
-
+    
           let finalBooks = books;
           let successMessage = '';
           
           if (useSupabase) {
+              console.log('☁️ Using Supabase mode');
+              console.log('🔑 Supabase URL:', settings?.supabaseUrl);
+              console.log('🔑 Has Key:', !!settings?.supabaseKey);
+              
               // Supabase Logic: Download, merge, upload
               if (saveMode === 'existing') {
+                  console.log('📥 Downloading existing collection...');
                   const existingCsv = await downloadFileContent(`${collectionName}.csv`, settings!.supabaseUrl!, settings!.supabaseKey!);
+                  console.log('✅ Downloaded existing CSV');
+                  
                   const existingBooks = parseCSV(existingCsv);
+                  console.log('📚 Existing books count:', existingBooks.length);
+                  
                   const { mergedBooks, addedCount } = mergeBooks(existingBooks, books);
+                  console.log('🔀 Merged books:', { total: mergedBooks.length, added: addedCount });
+                  
                   finalBooks = mergedBooks;
                   successMessage = addedCount === 0 
                       ? `Collection "${collectionName}" is already up-to-date.`
                       : `Added ${addedCount} new book(s) to "${collectionName}". Total is now ${mergedBooks.length}.`;
               } else {
+                  console.log('🆕 Creating new collection');
                   successMessage = `Successfully created and saved to "${collectionName}".`;
               }
+              
               const csvData = convertToCSV(finalBooks);
+              console.log('📝 CSV data length:', csvData.length);
+              console.log('📤 Uploading to Supabase...');
+              
               await uploadCsvToSupabase(csvData, `${collectionName}.csv`, settings!.supabaseUrl!, settings!.supabaseKey!);
+              console.log('✅ Upload complete!');
           } else {
               // Local Storage Logic
               if (saveMode === 'existing') {
@@ -153,18 +172,24 @@ const ResultsDisplay = React.forwardRef<HTMLDivElement, ResultsDisplayProps>(
               }
               saveCollection(collectionName, finalBooks);
           }
-
+    
+          console.log('🎉 Save successful!');
           setSaveStatus('success');
           setSaveMessage(successMessage);
           onSaveSuccess(collectionName);
+          
+          console.log('🔔 Calling onLibraryUpdated');
           onLibraryUpdated?.();
+          console.log('✅ onLibraryUpdated called');
+          
           setNewCollectionName('');
-
+    
           setTimeout(() => {
               onReset();
           }, 2500);
-
+    
       } catch (err) {
+        console.error('❌ Save failed:', err);
         setSaveStatus('error');
         const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred.';
         setSaveMessage(`Save failed: ${errorMessage}`);
