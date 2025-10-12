@@ -10,9 +10,10 @@ import CameraCapture from './CameraCapture';
 
 interface UploadViewProps {
     settings: AppSettings;
+    onLibraryUpdated?: () => void;
 }
 
-const UploadView: React.FC<UploadViewProps> = ({ settings }) => {
+const UploadView: React.FC<UploadViewProps> = ({ settings, onLibraryUpdated }) => {
   const [uploadState, setUploadState] = useState<UploadState>(UploadState.IDLE);
   const [uploadedImage, setUploadedImage] = useState<string | null>(null);
   const [books, setBooks] = useState<Book[]>([]);
@@ -137,6 +138,7 @@ const UploadView: React.FC<UploadViewProps> = ({ settings }) => {
             settings={settings}
             lastSavedCollection={lastSavedCollection}
             onSaveSuccess={setLastSavedCollection}
+            onLibraryUpdated={onLibraryUpdated}
           />
         </div>
       );
