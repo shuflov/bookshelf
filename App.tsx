@@ -1,5 +1,5 @@
+
 import React, { useState, useEffect } from 'react';
-import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { AppView, AppSettings } from './types';
 import Navigation from './components/Navigation';
 import Settings from './components/Settings';
@@ -7,132 +7,63 @@ import UploadView from './components/UploadView';
 import LibraryViewer from './components/LibraryViewer';
 import Spinner from './components/Spinner';
 
-// Extend AppSettings to include Supabase credentials
-interface ExtendedAppSettings extends AppSettings {
-  supabaseUrl: string;
-  supabaseKey: string;
-  apiKey?: string; // Existing apiKey for Gemini or other services
-}
-
-// Module-level cache for the Supabase client
-let supabaseInstance: SupabaseClient | null = null;
-let lastSupabaseUrl: string | null = null;
-let lastSupabaseKey: string | null = null;
-
-const getSupabaseClient = (supabaseUrl: string, supabaseKey: string): SupabaseClient => {
-  if (supabaseInstance && lastSupabaseUrl === supabaseUrl && lastSupabaseKey === supabaseKey) {
-    return supabaseInstance;
-  }
-
-  if (!supabaseUrl || !supabaseKey) {
-    throw new Error("Supabase URL or Key not provided.");
-  }
-
-  lastSupabaseUrl = supabaseUrl;
-  lastSupabaseKey = supabaseKey;
-  supabaseInstance = createClient(supabaseUrl, supabaseKey, {
-    auth: {
-      persistSession: true,
-      autoRefreshToken: true,
-    },
-  });
-
-  return supabaseInstance;
-};
-
 const App: React.FC = () => {
-  const [settings, setSettings] = useState<ExtendedAppSettings | null>(null);
+  const [settings, setSettings] = useState<AppSettings | null>(null);
   const [currentView, setCurrentView] = useState<AppView>('upload');
   const [libraryRefreshKey, setLibraryRefreshKey] = useState(0);
-  const [supabaseClient, setSupabaseClient] = useState<SupabaseClient | null>(null);
 
   useEffect(() => {
-    // Load settings from localStorage
     try {
       const storedSettings = localStorage.getItem('appSettings');
-      let parsedSettings: ExtendedAppSettings;
       if (storedSettings) {
-        parsedSettings = JSON.parse(storedSettings);
+        const parsedSettings = JSON.parse(storedSettings);
         setSettings(parsedSettings);
-        if (!parsedSettings.supabaseKey || !parsedSettings.supabaseUrl) {
+        // Force user to settings if the API key is missing.
+        if (!parsedSettings.apiKey) {
           setCurrentView('settings');
         }
       } else {
-        parsedSettings = {
-          supabaseUrl: process.env.REACT_APP_SUPABASE_URL || '',
-          supabaseKey: process.env.REACT_APP_SUPABASE_KEY || '',
-        };
-        setSettings(parsedSettings);
-        setCurrentView('settings');
-      }
-
-      // Initialize Supabase client
-      try {
-        const client = getSupabaseClient(parsedSettings.supabaseUrl, parsedSettings.supabaseKey);
-        setSupabaseClient(client);
-
-        // Restore session
-        client.auth.getSession().then(({ data: { session }, error }) => {
-          if (error) {
-            console.error("Error restoring session:", error);
-            return;
-          }
-          console.log("Session restored:", session ? "Active" : "None");
-        });
-
-        // Listen for auth state changes
-        client.auth.onAuthStateChange((event, session) => {
-          console.log("Auth state changed:", event, session);
-        });
-      } catch (error) {
-        console.error("Failed to initialize Supabase client:", error);
+        // No settings found, start on the settings page.
+        setSettings({});
         setCurrentView('settings');
       }
     } catch (e) {
       console.error("Could not parse settings from localStorage", e);
-      setSettings({
-        supabaseUrl: process.env.REACT_APP_SUPABASE_URL || '',
-        supabaseKey: process.env.REACT_APP_SUPABASE_KEY || '',
-      });
+      setSettings({});
       setCurrentView('settings');
     }
   }, []);
 
-  const handleSaveSettings = (newSettings: ExtendedAppSettings) => {
+  const handleSaveSettings = (newSettings: AppSettings) => {
     localStorage.setItem('appSettings', JSON.stringify(newSettings));
     setSettings(newSettings);
-    // Reinitialize Supabase client if credentials changed
-    try {
-      const client = getSupabaseClient(newSettings.supabaseUrl, newSettings.supabaseKey);
-      setSupabaseClient(client);
-    } catch (error) {
-      console.error("Failed to reinitialize Supabase client:", error);
-    }
-    if (currentView === 'settings' && newSettings.supabaseKey && newSettings.supabaseUrl) {
+    // If we were on the settings page, move to the upload page after saving, but only if the API key is now present.
+    if (currentView === 'settings' && newSettings.apiKey) {
       setCurrentView('upload');
     }
   };
 
   const handleLibraryUpdated = () => {
+    // Increment the key to force LibraryViewer to remount and reload data
     setLibraryRefreshKey(prev => prev + 1);
   };
 
   const renderCurrentView = () => {
-    if (!settings || !supabaseClient) return null;
-
+    if (!settings) return null;
+    
     switch (currentView) {
       case 'settings':
         return <Settings initialSettings={settings} onSave={handleSaveSettings} />;
       case 'upload':
-        return <UploadView settings={settings} supabaseClient={supabaseClient} onLibraryUpdated={handleLibraryUpdated} />;
+        return <UploadView settings={settings} onLibraryUpdated={handleLibraryUpdated} />;
       case 'library':
-        return <LibraryViewer settings={settings} supabaseClient={supabaseClient} key={libraryRefreshKey} />;
+        return <LibraryViewer settings={settings} key={libraryRefreshKey} />;
       default:
         return null;
     }
   };
 
-  if (settings === null || supabaseClient === null) {
+  if (settings === null) {
     return (
       <div className="min-h-screen bg-gray-900 flex items-center justify-center">
         <Spinner message="Loading configuration..." />
