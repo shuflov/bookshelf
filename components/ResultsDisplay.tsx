@@ -243,11 +243,7 @@ const ResultsDisplay = React.forwardRef<HTMLDivElement, ResultsDisplayProps>(
           
           <div className="mt-6 flex flex-col sm:flex-row gap-4">
             <ActionButton onClick={handleDownload} text="Download CSV" primary={false} />
-            <ActionButton
-              onClick={handleToggleSaveUI}
-              text="Save to Library"
-              primary={false}
-            />
+            <ActionButton onClick={handleToggleSaveUI} text="Save to Library" primary={false} />
             <ActionButton onClick={onReset} text="Add More Books" primary={true} />
           </div>
 
