@@ -1,4 +1,3 @@
-
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
 // Module-level cache for the Supabase client
@@ -22,7 +21,10 @@ const getSupabaseClient = async (supabaseUrl: string, supabaseKey: string): Prom
   }
 
   // Credentials have changed or client doesn't exist, create a new one.
-  const newInstance = createClient(supabaseUrl, supabaseKey);
+  // Add 'Cache-Control': 'no-cache' to prevent browsers from serving stale data.
+  const newInstance = createClient(supabaseUrl, supabaseKey, {
+    global: { headers: { 'Cache-Control': 'no-cache' } },
+  });
 
   // "Warm-up" the client by trying to list files from the 'library' bucket.
   // This is a more relevant test than listBuckets() and is more likely to succeed with an anon key.
@@ -56,7 +58,9 @@ export const testSupabaseConnection = async (supabaseUrl: string, supabaseKey: s
         return { success: false, message: "Please provide both Supabase URL and Anon Key." };
     }
     try {
-        const testClient = createClient(supabaseUrl, supabaseKey);
+        const testClient = createClient(supabaseUrl, supabaseKey, {
+            global: { headers: { 'Cache-Control': 'no-cache' } },
+        });
         // Attempt to list files in the required bucket to verify credentials and bucket existence.
         const { error } = await testClient.storage.from('library').list('', { limit: 1 });
 
