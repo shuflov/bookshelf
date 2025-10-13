@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { AppSettings } from '../types';
 import ActionButton from './ActionButton';
+import { testSupabaseConnection } from '../services/supabaseService';
 
 interface SettingsProps {
   initialSettings: AppSettings;
@@ -11,6 +12,10 @@ const Settings: React.FC<SettingsProps> = ({ initialSettings, onSave }) => {
   const [apiKey, setApiKey] = useState(initialSettings.apiKey || '');
   const [supabaseUrl, setSupabaseUrl] = useState(initialSettings.supabaseUrl || '');
   const [supabaseKey, setSupabaseKey] = useState(initialSettings.supabaseKey || '');
+  const [saveMessage, setSaveMessage] = useState<string>('');
+
+  const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
+  const [testMessage, setTestMessage] = useState('');
 
   const handleSave = () => {
     onSave({
@@ -18,6 +23,20 @@ const Settings: React.FC<SettingsProps> = ({ initialSettings, onSave }) => {
       supabaseUrl: supabaseUrl.trim() || undefined,
       supabaseKey: supabaseKey.trim() || undefined,
     });
+    setSaveMessage('Settings saved!');
+    setTimeout(() => setSaveMessage(''), 3000); // Clear message after 3 seconds
+  };
+
+  const handleTestConnection = async () => {
+    setTestStatus('testing');
+    setTestMessage('');
+    const result = await testSupabaseConnection(supabaseUrl.trim(), supabaseKey.trim());
+    if (result.success) {
+      setTestStatus('success');
+    } else {
+      setTestStatus('error');
+    }
+    setTestMessage(result.message);
   };
 
   return (
@@ -86,9 +105,34 @@ const Settings: React.FC<SettingsProps> = ({ initialSettings, onSave }) => {
                         />
                     </div>
                 </div>
+                <div className="mt-6">
+                    <ActionButton
+                        onClick={handleTestConnection}
+                        text={testStatus === 'testing' ? 'Testing...' : 'Test Supabase Connection'}
+                        disabled={testStatus === 'testing' || !supabaseUrl.trim() || !supabaseKey.trim()}
+                        primary={false}
+                    />
+                </div>
+                 {testStatus !== 'idle' && (
+                    <div className={`mt-4 px-4 py-3 rounded-md text-sm text-center transition-all duration-300
+                      ${testStatus === 'success' ? 'bg-green-900/50 border border-green-700 text-green-300' : ''}
+                      ${testStatus === 'error' ? 'bg-red-900/50 border border-red-700 text-red-300' : ''}
+                      ${testStatus === 'testing' ? 'bg-blue-900/50 border border-blue-700 text-blue-300' : ''}
+                    `}>
+                      {testStatus === 'testing' ? (
+                           <div className="flex items-center justify-center gap-2">
+                               <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                               <span>Testing connection...</span>
+                           </div>
+                      ) : (
+                          <span>{testMessage}</span>
+                      )}
+                    </div>
+                  )}
             </div>
 
-            <div className="flex justify-end gap-4 pt-4">
+            <div className="flex justify-end items-center gap-4 pt-4">
+                {saveMessage && <p className="text-sm text-green-400 animate-fade-in">{saveMessage}</p>}
                 <ActionButton 
                     onClick={handleSave} 
                     text={"Save Settings"} 
