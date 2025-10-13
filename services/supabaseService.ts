@@ -1,3 +1,4 @@
+
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
 // Module-level cache for the Supabase client
@@ -57,7 +58,7 @@ export const testSupabaseConnection = async (supabaseUrl: string, supabaseKey: s
     try {
         const testClient = createClient(supabaseUrl, supabaseKey);
         // Attempt to list files in the required bucket to verify credentials and bucket existence.
-        const { error } = await testClient.storage.from('library').list('', { limit: 0 });
+        const { error } = await testClient.storage.from('library').list('', { limit: 1 });
 
         if (error) {
             if (error.message.includes("Bucket not found")) {
