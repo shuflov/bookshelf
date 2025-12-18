@@ -31,7 +31,7 @@ export const identifyBooksFromImage = async (base64Image: string, mimeType: stri
         2. The full name of the author.
         3. The year the book was FIRST published.
         4. The primary literary genre of the book (e.g., Fiction, Sci-Fi, History).
-        5. A concise, one-sentence description of the book's content or plot.
+        5. A concise, two-sentence description of the book's content or plot.
 
         If any piece of information cannot be determined, use the string "Unknown". Return the data for all identified books in the specified JSON format.
       `
