@@ -50,7 +50,7 @@ const App: React.FC = () => {
   };
 
   const renderCurrentView = () => {
-    if (!settings) return null;
+    if (settings === null) return null;  // ← Changed from !settings to settings === null
     
     switch (currentView) {
       case 'settings':
