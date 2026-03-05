@@ -97,8 +97,6 @@ export const uploadCsvToSupabase = async (csvData: string, fileName: string, sup
     }
     throw new Error(`Failed to upload to Supabase: ${error.message}`);
   }
-
-  console.log("Supabase upload successful:", data);
 };
 
 
