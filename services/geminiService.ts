@@ -29,9 +29,9 @@ export const identifyBooksFromImage = async (base64Image: string, mimeType: stri
         Analyze the provided image containing books. Identify each distinct book visible. For each book, extract the following details with high accuracy:
         1. The full title of the book.
         2. The full name of the author.
-        3. The year the book was FIRST published.
+        3. The year the author of the book was born.
         4. The primary literary genre of the book (e.g., Fiction, Sci-Fi, History).
-        5. A concise, two-sentence description of the book's content or plot.
+        5. A concise, max 5 words description of the book's content or plot.
 
         If any piece of information cannot be determined, use the string "Unknown". Return the data for all identified books in the specified JSON format.
       `
