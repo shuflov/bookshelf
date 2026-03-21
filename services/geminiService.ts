@@ -9,7 +9,7 @@ const bookSchema = {
     author: { type: Type.STRING },
     publicationYear: { type: Type.STRING },
     genre: { type: Type.STRING },
-    description: { type: Type.STRING }
+    description: { type: Type.STRING, maxLength: 35 }
   },
   required: ['title', 'author', 'publicationYear', 'genre', 'description']
 };
@@ -25,16 +25,7 @@ export const identifyBooksFromImage = async (base64Image: string, mimeType: stri
      const model = 'gemini-2.5-flash';
   
     const textPart = {
-      text: `
-        Analyze the provided image containing books. Identify each distinct book visible. For each book, extract the following details with high accuracy:
-        1. The full title of the book.
-        2. The full name of the author.
-        3. The year the author of the book was born.
-        4. The primary literary genre of the book (e.g., Fiction, Sci-Fi, History).
-        5. A concise, max 5 words description of the book's content or plot.
-
-        If any piece of information cannot be determined, use the string "Unknown". Return the data for all identified books in the specified JSON format.
-      `
+      text: `Analyze the provided image containing books. Identify each distinct book visible. For each book, extract: title, author, year of birth, genre, and a description. CRITICAL: The description MUST be exactly 5 words or fewer. Never exceed 5 words. Use "Unknown" if information cannot be determined.`
     };
 
     const imagePart = {
@@ -48,6 +39,7 @@ export const identifyBooksFromImage = async (base64Image: string, mimeType: stri
         model: model,
         contents: { parts: [imagePart, textPart] },
         config: {
+            systemInstruction: "You are a book identification assistant. CRITICAL RULE: The description field must be exactly 5 words or fewer. Never exceed 5 words in any description.",
             responseMimeType: "application/json",
             responseSchema: {
                 type: Type.ARRAY,
@@ -57,8 +49,11 @@ export const identifyBooksFromImage = async (base64Image: string, mimeType: stri
     });
 
     const jsonText = response.text.trim();
-    const books = JSON.parse(jsonText);
-    return books;
+    const books: Book[] = JSON.parse(jsonText);
+    return books.map(book => ({
+      ...book,
+      description: book.description.split(' ').slice(0, 5).join(' ')
+    }));
 
   } catch (error) {
     console.error("Error in Gemini API call:", error);
