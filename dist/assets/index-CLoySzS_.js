@@ -12105,7 +12105,7 @@ const ActionButton = ({ onClick, text, primary = false, disabled = false }) => {
 };
 const scriptRel = "modulepreload";
 const assetsURL = function(dep) {
-  return "/bookshelf_ai/" + dep;
+  return "/bookshelf/" + dep;
 };
 const seen = {};
 const __vitePreload = function preload2(baseModule, deps, importerUrl) {
@@ -37173,4 +37173,4 @@ const root = ReactDOM.createRoot(rootElement);
 root.render(
   /* @__PURE__ */ jsxRuntimeExports.jsx(React$2.StrictMode, { children: /* @__PURE__ */ jsxRuntimeExports.jsx(App, {}) })
 );
-//# sourceMappingURL=index-DeNXIfcc.js.map
+//# sourceMappingURL=index-CLoySzS_.js.map

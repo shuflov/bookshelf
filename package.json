@@ -4,7 +4,7 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
-  "homepage": "https://shuflov.github.io/bookshelf_ai",
+  "homepage": "https://shuflov.github.io/bookshelf",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
